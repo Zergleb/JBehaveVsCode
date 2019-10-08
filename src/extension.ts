@@ -1,29 +1,76 @@
-// The module 'vscode' contains the VS Code extensibility API
-// Import the module and reference it with the alias vscode in your code below
 import * as vscode from 'vscode';
 
-// this method is called when your extension is activated
-// your extension is activated the very first time the command is executed
-export function activate(context: vscode.ExtensionContext) {
+const jbehaveCommandFinder = /@When\(\s*"(.*)"\s*\)|@Given\(\s*"(.*)"\s*\)|@Then\(\s*"(.*)"\s*\)|@Alias\(\s*"(.*)"\s*\)/;
 
-	// Use the console to output diagnostic information (console.log) and errors (console.error)
-	// This line of code will only be executed once when your extension is activated
+interface Command {
+	command: string;
+	uri: vscode.Uri;
+	line: number;
+}
+
+export async function activate(context: vscode.ExtensionContext) {
 	console.log('Congratulations, your extension "jbehaveutils" is now active!');
 
-	// The command has been defined in the package.json file
-	// Now provide the implementation of the command with registerCommand
-	// The commandId parameter must match the command field in package.json
-	let disposable = vscode.commands.registerCommand('extension.helloWorld', async () => {
-		var files = await vscode.workspace.findFiles('**/*.java', '', 10000);
-		
-
-
-		await vscode.window.showTextDocument(files[25], { preview: false });
+	let goTo = vscode.commands.registerTextEditorCommand('extension.jbehave.goToAction', async (textEditor, edit) => {
+		var range = textEditor.document.getWordRangeAtPosition(textEditor.selection.anchor);
+		if(range) {
+			var search = textEditor.document.lineAt(range.start.line).text.trim();
+			if(search.indexOf("When ") === 0) {
+				search = search.substring(5);
+			} else if(search.indexOf("Then ") === 0) {
+				search = search.substring(5);
+			} else if(search.indexOf("Given ") === 0) {
+				search = search.substring(6);
+			} else if(search.indexOf("And ") === 0) {
+				search = search.substring(4);
+			}
+			console.log("search: " + search);
+			console.log(context.workspaceState.get("commands"));
+			var commands: {[s: string]: Command} = (context.workspaceState.get("commands") as any);
+			var command;
+			for(var check in commands) {
+				var match = search.match(check);
+				if(match && match[0] === search) {
+					command = commands[check];
+					break;
+				}
+			}
+			if(command) {
+				var editor = await vscode.window.showTextDocument(command.uri, {preview: false});
+				editor.revealRange(editor.document.lineAt(command.line - 1).range);
+			}
+		}
 	});
 
-	let test = context.workspaceState;
+	console.log('Testing Does this show');
+	var files = await vscode.workspace.findFiles('**/*Steps.java', '**/.history', 10000);
 
-	context.subscriptions.push(disposable);
+	const commands: { [s: string]: Command; } = {};
+	
+	files.forEach(async (file) => {
+		var document = await vscode.workspace.openTextDocument(file);
+		var lines = document.getText().split("\n");
+		for(var i = 0; i < lines.length; i++) {
+			var found = jbehaveCommandFinder.exec(lines[i]);
+			if(found) {
+				for(var x = 1; x < found.length; x++) {
+					if(found[x]) {
+						var command = {
+							command: found[x].replace(/\$\w+|<\w+>/g, "[^\\s]+"),
+							uri: file,
+							line: i
+						};
+						commands[command.command] = command;
+						console.log("Line number " + (command.line));
+					}
+				}
+			}
+		}
+	});
+	
+	context.workspaceState.update("commands", commands);
+
+	context.subscriptions.push(goTo);
 }
 
 // this method is called when your extension is deactivated

@@ -10,14 +10,21 @@
 		"Other"
 	],
 	"activationEvents": [
-		"onCommand:extension.helloWorld"
+		"*"
 	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"commands": [
 			{
-				"command": "extension.helloWorld",
-				"title": "Hello World"
+				"command": "extension.jbehave.goToAction",
+				"title": "Go To Action",
+				"category": "JBehave"
+			}
+		],
+		"keybindings": [
+			{
+				"command": "extension.jbehave.goToAction",
+				"when": "editorTextFocus"
 			}
 		]
 	},
